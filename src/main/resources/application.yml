@@ -1,0 +1,58 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: camunda-loan-poc
+
+  datasource:
+    url: jdbc:postgresql://localhost:5435/loan_db
+    username: loan_user
+    password: loan_pass
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+zeebe:
+  client:
+    broker:
+      gateway-address: localhost:26500
+    security:
+      plaintext: true
+    worker:
+      threads: 4
+      default-type: camunda-loan-worker
+      default-name: loan-worker
+    job:
+      timeout: 300000  # 5 minutes in milliseconds
+    message:
+      time-to-live: 3600000  # 1 hour
+
+rollout:
+  personal-loan:
+    v1: 80
+    v2: 20
+  mortgage:
+    v1: 100
+    v2: 0
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.example.loan: DEBUG
+    io.camunda: INFO

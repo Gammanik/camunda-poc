@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.15.0" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.8.0">
+  <bpmn:process id="loan-process-v2" name="Loan Process V2" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="Loan application received">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="credit_check" name="Credit Check">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="credit-check" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:incoming>Flow_from_manual_review</bpmn:incoming>
+      <bpmn:outgoing>Flow_to_doc_verification</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="doc_verification" name="Document Verification">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="doc-verification" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_to_doc_verification</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_Decision" name="Credit decision?">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_Approved</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Rejected</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Manual_Review</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="generate_contract" name="Generate Contract">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="generate-contract" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Approved</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="End_Approved" name="Loan approved">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="End_Rejected" name="Loan rejected">
+      <bpmn:incoming>Flow_Rejected</bpmn:incoming>
+      <bpmn:incoming>Flow_Doc_Failed</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:userTask id="manual_underwriting" name="Manual Underwriting">
+      <bpmn:incoming>Flow_Manual_Review</bpmn:incoming>
+      <bpmn:outgoing>Flow_from_manual_review</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:boundaryEvent id="Event_Timeout" name="7 day timeout" attachedToRef="manual_underwriting">
+      <bpmn:outgoing>Flow_Timeout</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="TimerEventDefinition_1">
+        <bpmn:timeDuration>P7D</bpmn:timeDuration>
+      </bpmn:timerEventDefinition>
+    </bpmn:boundaryEvent>
+    <bpmn:boundaryEvent id="Event_Doc_Verification_Error" name="Doc verification failed" attachedToRef="doc_verification">
+      <bpmn:outgoing>Flow_Doc_Failed</bpmn:outgoing>
+      <bpmn:errorEventDefinition id="ErrorEventDefinition_1" errorRef="Error_Doc_Verification" />
+    </bpmn:boundaryEvent>
+    <bpmn:endEvent id="End_Timeout" name="Timeout - Auto rejected">
+      <bpmn:incoming>Flow_Timeout</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="credit_check" />
+    <bpmn:sequenceFlow id="Flow_to_doc_verification" sourceRef="credit_check" targetRef="doc_verification" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="doc_verification" targetRef="Gateway_Decision" />
+    <bpmn:sequenceFlow id="Flow_Approved" name="APPROVED" sourceRef="Gateway_Decision" targetRef="generate_contract">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">=creditDecision = "APPROVED"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Rejected" name="REJECTED" sourceRef="Gateway_Decision" targetRef="End_Rejected">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">=creditDecision = "REJECTED"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Manual_Review" name="MANUAL_REVIEW" sourceRef="Gateway_Decision" targetRef="manual_underwriting">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">=creditDecision = "MANUAL_REVIEW"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="generate_contract" targetRef="End_Approved" />
+    <bpmn:sequenceFlow id="Flow_from_manual_review" sourceRef="manual_underwriting" targetRef="credit_check" />
+    <bpmn:sequenceFlow id="Flow_Timeout" sourceRef="Event_Timeout" targetRef="End_Timeout" />
+    <bpmn:sequenceFlow id="Flow_Doc_Failed" sourceRef="Event_Doc_Verification_Error" targetRef="End_Rejected" />
+  </bpmn:process>
+  <bpmn:error id="Error_Doc_Verification" name="DOC_VERIFICATION_FAILED" errorCode="DOC_VERIFICATION_FAILED" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="loan-process-v2">
+      <bpmndi:BPMNShape id="_BPMNShape_StartEvent_2" bpmnElement="StartEvent_1">
+        <dc:Bounds x="152" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_CreditCheck" bpmnElement="credit_check">
+        <dc:Bounds x="240" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_DocVerification" bpmnElement="doc_verification">
+        <dc:Bounds x="390" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Gateway_Decision" bpmnElement="Gateway_Decision" isMarkerVisible="true">
+        <dc:Bounds x="545" y="95" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_GenerateContract" bpmnElement="generate_contract">
+        <dc:Bounds x="650" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_End_Approved" bpmnElement="End_Approved">
+        <dc:Bounds x="802" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_End_Rejected" bpmnElement="End_Rejected">
+        <dc:Bounds x="652" y="212" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_ManualUnderwriting" bpmnElement="manual_underwriting">
+        <dc:Bounds x="520" y="310" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_End_Timeout" bpmnElement="End_Timeout">
+        <dc:Bounds x="682" y="332" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Event_Doc_Verification_Error" bpmnElement="Event_Doc_Verification_Error">
+        <dc:Bounds x="472" y="142" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Event_Timeout" bpmnElement="Event_Timeout">
+        <dc:Bounds x="582" y="372" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">
+        <di:waypoint x="188" y="120" />
+        <di:waypoint x="240" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_to_doc_verification_di" bpmnElement="Flow_to_doc_verification">
+        <di:waypoint x="340" y="120" />
+        <di:waypoint x="390" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2">
+        <di:waypoint x="490" y="120" />
+        <di:waypoint x="545" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Approved_di" bpmnElement="Flow_Approved">
+        <di:waypoint x="595" y="120" />
+        <di:waypoint x="650" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Rejected_di" bpmnElement="Flow_Rejected">
+        <di:waypoint x="570" y="145" />
+        <di:waypoint x="570" y="230" />
+        <di:waypoint x="652" y="230" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Manual_Review_di" bpmnElement="Flow_Manual_Review">
+        <di:waypoint x="570" y="145" />
+        <di:waypoint x="570" y="310" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3">
+        <di:waypoint x="750" y="120" />
+        <di:waypoint x="802" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_from_manual_review_di" bpmnElement="Flow_from_manual_review">
+        <di:waypoint x="520" y="350" />
+        <di:waypoint x="290" y="350" />
+        <di:waypoint x="290" y="160" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Timeout_di" bpmnElement="Flow_Timeout">
+        <di:waypoint x="618" y="390" />
+        <di:waypoint x="650" y="390" />
+        <di:waypoint x="650" y="350" />
+        <di:waypoint x="682" y="350" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Doc_Failed_di" bpmnElement="Flow_Doc_Failed">
+        <di:waypoint x="490" y="178" />
+        <di:waypoint x="490" y="230" />
+        <di:waypoint x="652" y="230" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
